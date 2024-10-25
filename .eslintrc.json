@@ -18,7 +18,9 @@
     {
       "files": ["**/*test.js"],
       "extends": ["eslint:recommended", "plugin:jest/recommended"],
-      "rules": { "jest/prefer-expect-assertions": "off" },
+      "rules": {
+        "jest/prefer-expect-assertions": "off"
+      },
       "env": {
         "jest": true
       }

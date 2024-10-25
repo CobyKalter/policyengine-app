@@ -1,5 +1,7 @@
 import { optimiseHousehold } from "../api/variables";
 import { defaultYear } from "./constants";
+import { DEFAULT_DATASETS } from "./countries";
+import { wrappedJsonStringify } from "./wrappedJson";
 
 export function getReproducibilityCodeBlock(
   type,
@@ -39,8 +41,11 @@ export function getHeaderCode(type, metadata, policy) {
     lines.push("from " + metadata.package + " import Microsimulation");
   }
 
-  // If there is a reform, add the following Python imports
-  if (Object.keys(policy.reform.data).length > 0) {
+  // If either baseline or reform is custom, add the following Python imports
+  if (
+    Object.keys(policy.reform.data).length > 0 ||
+    Object.keys(policy.baseline.data).length > 0
+  ) {
     lines.push("from policyengine_core.reforms import Reform");
   }
 
@@ -54,7 +59,7 @@ export function getBaselineCode(policy, metadata) {
   ) {
     return [];
   }
-  let json_str = JSON.stringify(policy.baseline.data, null, 2);
+  let json_str = wrappedJsonStringify(policy.baseline.data, null, 2);
   json_str = sanitizeStringToPython(json_str);
   let lines = [""].concat(json_str.split("\n"));
   lines[1] = "baseline = Reform.from_dict({" + lines[0];
@@ -67,7 +72,7 @@ export function getReformCode(policy, metadata) {
   if (!policy?.baseline?.data || Object.keys(policy.reform.data).length === 0) {
     return [];
   }
-  let json_str = JSON.stringify(policy.reform.data, null, 2);
+  let json_str = wrappedJsonStringify(policy.reform.data, null, 2);
   json_str = sanitizeStringToPython(json_str);
   let lines = [""].concat(json_str.split("\n"));
   lines[1] = "reform = Reform.from_dict({" + lines[0];
@@ -151,33 +156,35 @@ export function getImplementationCode(type, region, timePeriod, policy) {
 
   const hasBaseline = Object.keys(policy?.baseline?.data).length > 0;
   const hasReform = Object.keys(policy?.reform?.data).length > 0;
-  const hasDatasetSpecified = region === "enhanced_us";
-  const dataset = hasDatasetSpecified ? '"enhanced_cps_2022"' : "";
+
+  // Check if the region has a dataset specified
+  const hasDatasetSpecified = Object.keys(DEFAULT_DATASETS).includes(region);
+  const dataset = hasDatasetSpecified ? DEFAULT_DATASETS[region] : "";
 
   return [
     "",
     "",
     `baseline = Microsimulation(${
       hasDatasetSpecified && hasBaseline
-        ? `reform=baseline, dataset=${dataset}`
+        ? `reform=baseline, dataset='${dataset}'`
         : hasBaseline
           ? `reform=baseline`
           : hasDatasetSpecified
-            ? `dataset=${dataset}`
+            ? `dataset='${dataset}'`
             : ""
     })`,
     `reformed = Microsimulation(${
       hasDatasetSpecified && hasReform
-        ? `reform=reform, dataset=${dataset}`
+        ? `reform=reform, dataset='${dataset}'`
         : hasReform
           ? `reform=reform`
           : hasDatasetSpecified
-            ? `dataset=${dataset}`
+            ? `dataset='${dataset}'`
             : ""
     })`,
-    `baseline_person = baseline.calculate("household_net_income", period=${timePeriod || defaultYear}, map_to="person")`,
-    `reformed_person = reformed.calculate("household_net_income", period=${timePeriod || defaultYear}, map_to="person")`,
-    "difference_person = reformed_person - baseline_person",
+    `baseline_income = baseline.calculate("household_net_income", period=${timePeriod || defaultYear})`,
+    `reformed_income = reformed.calculate("household_net_income", period=${timePeriod || defaultYear})`,
+    "difference_income = reformed_income - baseline_income",
   ];
 }
 
@@ -255,8 +262,7 @@ export function doesParamNameContainNumber(paramName) {
 
 /**
  * Utility function to sanitize a string and ensure that it's valid Python;
- * currently converts JS 'null', 'true', and 'false' to Python
- * 'None', 'True', and 'False'
+ * currently converts JS 'null', 'true', 'false', '"Infinity"', and '"-Infinity"' to Python
  * @param {String} string
  * @returns {String}
  */
@@ -264,5 +270,7 @@ export function sanitizeStringToPython(string) {
   return string
     .replace(/true/g, "True")
     .replace(/false/g, "False")
-    .replace(/null/g, "None");
+    .replace(/null/g, "None")
+    .replace(/"Infinity"/g, ".inf")
+    .replace(/"-Infinity"/g, "-.inf");
 }

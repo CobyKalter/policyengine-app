@@ -22,9 +22,11 @@ import { useEffect, useState } from "react";
 import useCountryId from "../hooks/useCountryId";
 import useLocalStorage from "../hooks/useLocalStorage";
 import { postUserPolicy, cullOldPolicies } from "../api/userPolicies";
-import { countryNames } from "../data/countries";
+import { COUNTRY_NAMES } from "../data/countries";
 import moment from "moment";
 import { formatCurrencyAbbr } from "../lang/format";
+import ErrorPage from "../layout/ErrorPage";
+import { wrappedResponseJson } from "../data/wrappedJson";
 
 const STATES = {
   EMPTY: "empty",
@@ -54,7 +56,7 @@ export default function UserProfilePage(props) {
   // visiting. authedUserProfile is shared via props, as the entire
   // app has access to this info, while accessedUserProfile requires a fetch
 
-  const { metadata, authedUserProfile } = props;
+  const { metadata, authedUserProfile, metadataError } = props;
   let params = useParams();
   const accessedUserId = params.user_id;
   const isOwnProfile =
@@ -263,25 +265,30 @@ export default function UserProfilePage(props) {
             dateFormatter={dateFormatter}
             setAccessedUserProfile={setAccessedUserProfile}
             setDispState={setDispState}
+            metadataError={metadataError}
           />
         </PageHeader>
-        <Section title={sectionTitle} backgroundColor={style.colors.BLUE_98}>
-          <div
-            style={{
-              display: "grid",
-              width: "100%",
-              gridTemplateColumns: `repeat(${gridColumns}, 1fr)`,
-              gap: "12px",
-              marginTop: 30,
-            }}
-          >
-            {arePoliciesLoading
-              ? loadingCards
-              : accessedUserPolicies.length === 0
-                ? noCardPlaceholder
-                : accessedUserPolicyCards}
-          </div>
-        </Section>
+        {metadataError ? (
+          <ErrorPage />
+        ) : (
+          <Section title={sectionTitle} backgroundColor={style.colors.BLUE_98}>
+            <div
+              style={{
+                display: "grid",
+                width: "100%",
+                gridTemplateColumns: `repeat(${gridColumns}, 1fr)`,
+                gap: "12px",
+                marginTop: 30,
+              }}
+            >
+              {arePoliciesLoading
+                ? loadingCards
+                : accessedUserPolicies.length === 0
+                  ? noCardPlaceholder
+                  : accessedUserPolicyCards}
+            </div>
+          </Section>
+        )}
         <Footer />
       </div>
     </>
@@ -298,6 +305,7 @@ function UserProfileSection(props) {
     dateFormatter,
     setAccessedUserProfile,
     setDispState,
+    metadataError,
   } = props;
   const { isAuthenticated, user } = useAuth0();
   const countryId = useCountryId();
@@ -317,10 +325,14 @@ function UserProfileSection(props) {
     dispCountry = "No user found";
   } else if (dispState === STATES.EMPTY) {
     dispCountry = "Loading";
-  } else if (countryNames[accessedUserProfile.primary_country].singleWord) {
-    dispCountry = countryNames[accessedUserProfile.primary_country].singleWord;
+  } else if (COUNTRY_NAMES[accessedUserProfile.primary_country].singleWord) {
+    dispCountry = COUNTRY_NAMES[accessedUserProfile.primary_country].singleWord;
   } else {
-    dispCountry = countryNames[accessedUserProfile.primary_country].standard;
+    dispCountry = COUNTRY_NAMES[accessedUserProfile.primary_country].standard;
+  }
+
+  if (metadataError) {
+    return null;
   }
 
   return (
@@ -430,7 +442,6 @@ function UserProfileSection(props) {
 
 function PolicySimulationCard(props) {
   const { metadata, userPolicy, keyValue } = props;
-  console.log(Object.keys(metadata));
 
   const CURRENT_API_VERSION = metadata?.version;
   const geography =
@@ -552,7 +563,7 @@ function UsernameDisplayAndEditor(props) {
 
     try {
       const res = await apiCall(USER_PROFILE_PATH, body, "PUT");
-      const resJson = await res.json();
+      const resJson = await wrappedResponseJson(res);
       if (resJson.status === "ok") {
         const data = await apiCall(
           `/${countryId}/user_profile?user_id=${accessedUserProfile.user_id}`,

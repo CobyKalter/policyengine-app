@@ -7,11 +7,12 @@ import {
 } from "./Display";
 import { useSearchParams } from "react-router-dom";
 import { asyncApiCall, copySearchParams, apiCall } from "../../../api/call";
-import ErrorPage from "layout/Error";
+import ErrorPage from "layout/ErrorPage";
 import { defaultYear } from "data/constants";
 import { areObjectsSame } from "../../../data/areObjectsSame";
 import { updateUserPolicy } from "../../../api/userPolicies";
 import useCountryId from "../../../hooks/useCountryId";
+import { wrappedResponseJson } from "../../../data/wrappedJson";
 // import LoadingCentered from "layout/LoadingCentered";
 
 /**
@@ -29,19 +30,43 @@ import useCountryId from "../../../hooks/useCountryId";
  * information to the user
  */
 export function FetchAndDisplayImpact(props) {
+  const { metadata, policy, userPolicyId, showPolicyImpactPopup } = props;
+
   const [searchParams, setSearchParams] = useSearchParams();
   const region = searchParams.get("region");
   const timePeriod = searchParams.get("timePeriod");
   const reformPolicyId = searchParams.get("reform");
   const baselinePolicyId = searchParams.get("baseline");
+  const maxHouseholds = searchParams.get("mode") === "lite" ? 10_000 : null;
   const renamed = searchParams.get("renamed");
+
   const [impact, setImpact] = useState(null);
   const [error, setError] = useState(null);
   const [averageImpactTime, setAverageImpactTime] = useState(20);
   const [secondsElapsed, setSecondsElapsed] = useState(0);
-  const { metadata, policy, userPolicyId, showPolicyImpactPopup } = props;
+  const [queuePos, setQueuePos] = useState("");
+
   const policyRef = useRef(null);
   const countryId = useCountryId();
+
+  /**
+   * Callback function utilized within asyncApiCall to
+   * display the queue position to the user
+   * @param {Object} data The data output within asyncApiCall to be consumed by the callback
+   * @returns {Void}
+   */
+  function computingCallback(data) {
+    // Position in queue message only occurs with average_time
+    // in the response object; if this is present, enable message
+    /*
+    if (data.average_time && data.message) {
+      setQueueMsg(data.message);
+    }
+    */
+    if (data.queue_position) {
+      setQueuePos(data.queue_position);
+    }
+  }
 
   useEffect(() => {
     if (
@@ -57,7 +82,10 @@ export function FetchAndDisplayImpact(props) {
 
     if (!!region && !!timePeriod && !!reformPolicyId && !!baselinePolicyId) {
       const selectedVersion = searchParams.get("version") || metadata.version;
-      const url = `/${metadata.countryId}/economy/${reformPolicyId}/over/${baselinePolicyId}?region=${region}&time_period=${timePeriod}&version=${selectedVersion}`;
+      const maxHouseholdString = maxHouseholds
+        ? `&max_households=${maxHouseholds}`
+        : "";
+      const url = `/${metadata.countryId}/economy/${reformPolicyId}/over/${baselinePolicyId}?region=${region}&time_period=${timePeriod}&version=${selectedVersion}${maxHouseholdString}`;
       setImpact(null);
       setError(null);
       // start counting (but stop when the API call finishes)
@@ -65,13 +93,13 @@ export function FetchAndDisplayImpact(props) {
         setSecondsElapsed((secondsElapsed) => secondsElapsed + 1);
       }, 1000);
       apiCall(url, null)
-        .then((res) => res.json())
+        .then((res) => wrappedResponseJson(res))
         .then((intermediateData) => {
           if (averageImpactTime === 20) {
             setAverageImpactTime(intermediateData.average_time || 20);
           }
         });
-      asyncApiCall(url, null, 1_000, 1_000)
+      asyncApiCall(url, null, 1_000, 1_000, computingCallback)
         .then((data) => {
           if (data.status === "error") {
             if (!data.result.baseline_economy) {
@@ -130,11 +158,11 @@ export function FetchAndDisplayImpact(props) {
         "baseline",
         searchParams.get("baseline") || defaults.baseline,
       );
-      setSearchParams(newSearch);
+      setSearchParams(newSearch, { replace: true });
     }
     policyRef.current = policy;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [region, timePeriod, reformPolicyId, baselinePolicyId]);
+  }, [region, timePeriod, reformPolicyId, baselinePolicyId, maxHouseholds]);
 
   useEffect(() => {
     if (!impact || !userPolicyId || !countryId) return;
@@ -152,7 +180,7 @@ export function FetchAndDisplayImpact(props) {
   }, [impact, countryId, userPolicyId]);
 
   if (error) {
-    return <DisplayError error={error} />;
+    return <DisplayError />;
   }
 
   if (!impact) {
@@ -160,6 +188,7 @@ export function FetchAndDisplayImpact(props) {
       <DisplayWait
         averageImpactTime={averageImpactTime}
         secondsElapsed={secondsElapsed}
+        queuePos={queuePos}
       />
     );
   }

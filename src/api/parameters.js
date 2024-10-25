@@ -1,6 +1,7 @@
 import { IntervalMap } from "algorithms/IntervalMap";
 import { countryApiCall } from "./call";
 import { cmpDates } from "lang/stringDates";
+import { wrappedResponseJson } from "../data/wrappedJson";
 
 export function buildParameterTree(parameters) {
   let tree = {};
@@ -8,9 +9,6 @@ export function buildParameterTree(parameters) {
   for (const parameter of Object.values(parameters).filter(
     (parameter) => parameter.economy || parameter.household,
   )) {
-    if (parameter.parameter.includes("abolitions")) {
-      continue;
-    }
     const nodeToInsert = {
       name: parameter.parameter,
       label: (
@@ -66,7 +64,7 @@ export function buildParameterTree(parameters) {
       }
       currentNode.children.push(nodeToInsert);
     } catch (e) {
-      console.log("Error inserting node", nodeToInsert, "into", currentNode);
+      console.error("Error inserting node", nodeToInsert, "into", currentNode);
     }
   }
   return tree.children.find((child) => child.name === "gov");
@@ -89,7 +87,7 @@ export function getNewPolicyId(countryId, newPolicyData, newPolicyLabel) {
     submission.label = newPolicyLabel;
   }
   return countryApiCall(countryId, "/policy", submission, "POST")
-    .then((response) => response.json())
+    .then((response) => wrappedResponseJson(response))
     .then((data) => {
       let result = {};
       if (data.status === "ok") {

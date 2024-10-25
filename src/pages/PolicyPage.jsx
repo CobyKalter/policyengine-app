@@ -13,16 +13,18 @@ import ThreeColumnPage from "../layout/ThreeColumnPage";
 import ParameterEditor from "./policy/input/ParameterEditor";
 import PolicyOutput from "./policy/output/PolicyOutput";
 import PolicyRightSidebar from "./policy/PolicyRightSidebar";
+import ErrorComponent from "../layout/ErrorComponent";
 import { getPolicyOutputTree } from "./policy/output/tree";
 import { Helmet } from "react-helmet";
 import SearchParamNavButton from "../controls/SearchParamNavButton";
 import style from "../style";
+import DeprecationModal from "../modals/DeprecationModal";
+import { impactKeys } from "../pages/policy/output/ImpactTypes.jsx";
 
 export function ParameterSearch(props) {
   const { metadata, callback } = props;
   const [searchParams, setSearchParams] = useSearchParams();
   const options = Object.values(metadata.parameters)
-    .filter((parameter) => !parameter.parameter.includes("abolitions"))
     .filter((parameter) => parameter.type === "parameter")
     .map((parameter) => ({
       value: parameter.parameter,
@@ -87,11 +89,21 @@ export default function PolicyPage(props) {
   const [searchParams, setSearchParams] = useSearchParams();
   const focus = searchParams.get("focus") || "";
 
+  const isOutput = focus.includes("policyOutput");
+  // Evaluate if policy is deprecated or not
+  const isPolicyDeprecated = checkIsPolicyDeprecated(metadata, policy);
+  let deprecatedParams = [];
+  if (isPolicyDeprecated) {
+    deprecatedParams = findDeprecatedParams(metadata, policy);
+  }
+
+  const countryVersion = metadata.version;
+
   useEffect(() => {
     if (!focus) {
       let newSearch = copySearchParams(searchParams);
       newSearch.set("focus", "gov");
-      setSearchParams(newSearch);
+      setSearchParams(newSearch, { replace: true });
     }
   });
 
@@ -103,7 +115,7 @@ export default function PolicyPage(props) {
         "reform",
         metadata.countryId === "us" ? 2 : metadata.countryId === "uk" ? 1 : 3,
       );
-      setSearchParams(newSearch);
+      setSearchParams(newSearch, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [!!policy.reform.data]);
@@ -112,6 +124,18 @@ export default function PolicyPage(props) {
 
   if (!policy.reform.data) {
     middle = <LoadingCentered />;
+  } else if (isPolicyDeprecated) {
+    middle = (
+      <>
+        <DeprecationModal
+          oldPolicy={policy}
+          countryVersion={countryVersion}
+          metadata={metadata}
+          deprecatedParams={deprecatedParams}
+        />
+        <ErrorComponent message="This policy is deprecated" />
+      </>
+    );
   } else if (
     Object.keys(metadata.parameters).includes(focus) &&
     metadata.parameters[focus].type === "parameter"
@@ -131,16 +155,54 @@ export default function PolicyPage(props) {
         {node.children}
       </FolderPage>
     );
-  } else if (focus.includes("policyOutput")) {
-    middle = (
-      <>
+  } else if (isOutput) {
+    const POLICY_OUTPUT_TREE = getPolicyOutputTree(metadata.countryId);
+    const validFocusValues = impactKeys;
+    const stripped_focus = focus.replace("policyOutput.", "");
+
+    // Check if the current focus is within validFocusValues
+    if (
+      focus === "policyOutput.policyBreakdown" ||
+      focus === "policyOutput.codeReproducibility" ||
+      validFocusValues.includes(stripped_focus)
+    ) {
+      middle = (
         <PolicyOutput
           metadata={metadata}
           policy={policy}
           userProfile={userProfile}
         />
-      </>
-    );
+      );
+    } else {
+      // Find the node in the tree where the name matches the focus
+      const findNodeByName = (node, name) => {
+        if (node.name === name) {
+          return node;
+        }
+        if (node.children) {
+          for (let child of node.children) {
+            const result = findNodeByName(child, name);
+            if (result) {
+              return result;
+            }
+          }
+        }
+        return null;
+      };
+
+      const node = findNodeByName(POLICY_OUTPUT_TREE[0], focus);
+
+      // Render FolderPage with its children if the node is found
+      if (node) {
+        middle = (
+          <FolderPage label={node.label} metadata={metadata}>
+            {node.children}
+          </FolderPage>
+        );
+      } else {
+        middle = <div>Page cannot be found.</div>;
+      }
+    }
   }
 
   if (mobile) {
@@ -242,6 +304,10 @@ export default function PolicyPage(props) {
         <title>Policy | PolicyEngine</title>
       </Helmet>
       <ThreeColumnPage
+        enableLeftCollapse
+        enableCenterCollapse
+        leftCollapseTitle="Policy settings"
+        centerCollapseTitle={isOutput ? "Policy impacts" : "Policy parameters"}
         middle={<PolicyLeftSidebar metadata={metadata} />}
         right={middle}
         left={
@@ -249,9 +315,52 @@ export default function PolicyPage(props) {
             metadata={metadata}
             policy={policy}
             setPolicy={setPolicy}
+            isPolicyDeprecated={isPolicyDeprecated}
           />
         }
       />
     </>
   );
+}
+
+export function checkIsPolicyDeprecated(metadata, policy) {
+  // Iterate over baseline and reform
+  const baselineAndReform = Object.values(policy);
+  for (const item of baselineAndReform) {
+    // Iterate over each provision
+
+    // Handle current law, where data is null, and handle empty object
+    if (!item.data || Object.keys(item.data).length === 0) {
+      continue;
+    } else {
+      for (const provision in item.data) {
+        if (!Object.keys(metadata.parameters).includes(provision)) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+export function findDeprecatedParams(metadata, policy) {
+  const deprecatedParams = [];
+  const baselineAndReform = Object.values(policy);
+
+  for (const item of baselineAndReform) {
+    // Iterate over each provision
+
+    // Handle current law, where data is null, and handle empty object
+    if (!item.data || Object.keys(item.data).length === 0) {
+      continue;
+    } else {
+      for (const provision in item.data) {
+        if (!Object.keys(metadata.parameters).includes(provision)) {
+          deprecatedParams.push(provision);
+        }
+      }
+    }
+  }
+  return deprecatedParams;
 }

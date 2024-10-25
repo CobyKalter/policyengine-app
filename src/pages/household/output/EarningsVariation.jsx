@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiCall } from "../../../api/call";
-import ErrorPage from "../../../layout/Error";
+import ErrorPage from "../../../layout/ErrorPage";
 import ResultsPanel from "../../../layout/ResultsPanel";
 import { useSearchParams } from "react-router-dom";
 import LoadingCentered from "../../../layout/LoadingCentered";
@@ -10,6 +10,7 @@ import BaselineOnlyChart from "./EarningsVariation/BaselineOnlyChart";
 import BaselineAndReformChart from "./EarningsVariation/BaselineAndReformChart";
 import { getValueFromHousehold } from "../../../api/variables";
 import { Helmet } from "react-helmet";
+import { wrappedResponseJson } from "../../../data/wrappedJson";
 
 export default function EarningsVariation(props) {
   const {
@@ -96,7 +97,7 @@ export default function EarningsVariation(props) {
         household: householdData,
         policy: policy.baseline.data,
       })
-        .then((res) => res.json())
+        .then((res) => wrappedResponseJson(res))
         .then((data) => {
           setBaselineNetIncome(data.result);
         })
@@ -110,7 +111,7 @@ export default function EarningsVariation(props) {
           household: householdData,
           policy: policy.reform.data,
         })
-          .then((res) => res.json())
+          .then((res) => wrappedResponseJson(res))
           .then((data) => {
             setReformNetIncome(data.result);
           })

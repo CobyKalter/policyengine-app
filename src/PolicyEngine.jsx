@@ -2,10 +2,17 @@ import Home from "./pages/Home";
 import Research from "./pages/Research";
 import About from "./pages/About";
 import Jobs from "./pages/Jobs";
-import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
+import {
+  Navigate,
+  Outlet,
+  Route,
+  Routes,
+  useSearchParams,
+} from "react-router-dom";
 import Donate from "./pages/Donate";
 import { useLocation } from "react-router-dom";
 import BlogPage from "./pages/BlogPage";
+import { COUNTRY_BASELINE_POLICIES, COUNTRY_CODES } from "./data/countries";
 
 import { useEffect, useState, lazy, Suspense } from "react";
 import {
@@ -15,12 +22,13 @@ import {
   updateMetadata,
 } from "./api/call";
 import LoadingCentered from "./layout/LoadingCentered";
-import ErrorPage from "./layout/Error";
+import ErrorPage from "./layout/ErrorPage";
 import Header from "./layout/Header";
 import Testimonials from "./pages/Testimonials";
 import CalculatorInterstitial from "./pages/CalculatorInterstitial";
 import CitizensEconomicCouncil from "./applets/CitizensEconomicCouncil";
 import APIDocumentationPage from "./pages/APIDocumentationPage";
+import SimulationsPage from "./pages/Simulations";
 import CookieConsent from "./modals/CookieConsent";
 import TrafwaCalculator from "./applets/TrafwaCalculator";
 import StateEitcsCtcs from "./applets/StateEitcsCtcs";
@@ -31,7 +39,15 @@ import TACPage from "./pages/TermsAndConditions";
 import { useAuth0 } from "@auth0/auth0-react";
 import { ConfigProvider } from "antd";
 import style from "./style";
+import RedirectToCountry from "./routing/RedirectToCountry";
+import CountryIdLayout from "./routing/CountryIdLayout";
+import RedirectBlogPost from "./routing/RedirectBlogPost";
 import { StatusPage } from "./pages/StatusPage";
+import ManifestosComparison from "./applets/ManifestosComparison";
+import DeveloperLayout from "./pages/DeveloperLayout";
+import DeveloperHome from "./pages/DeveloperHome";
+import CTCComparison from "./applets/CTCComparison";
+import { wrappedResponseJson } from "./data/wrappedJson";
 
 const PolicyPage = lazy(() => import("./pages/PolicyPage"));
 const HouseholdPage = lazy(() => import("./pages/HouseholdPage"));
@@ -46,46 +62,25 @@ function ScrollToTop() {
   return null;
 }
 
-export default function PolicyEngine({ pathname }) {
-  const COUNTRIES = ["us", "uk", "ca", "ng", "il"];
-
-  // First, check if the country is specified (.org/[country]/...)
-  const path = pathname || window.location.pathname;
-  const pathParts = path.split("/");
-  let countryId = pathParts[1];
-
-  if (!COUNTRIES.includes(countryId)) {
-    // If the country is not specified, look up the country ID from the user's browser language
-    const browserLanguage = navigator.language;
-    countryId = {
-      "en-US": "us",
-      "en-GB": "uk",
-      "en-CA": "ca",
-      "en-NG": "ng",
-      "en-IL": "il",
-    }[browserLanguage];
-  }
+export default function PolicyEngine() {
+  // This will either return the country ID or null,
+  // but the page is guaranteed to redirect to an ID
+  const countryId = extractCountryId();
 
   const [searchParams, setSearchParams] = useSearchParams();
   const householdId = searchParams.get("household");
-  const defaultBaselinePolicy =
-    countryId === "uk"
-      ? 1
-      : countryId === "us"
-        ? 2
-        : countryId === "ca"
-          ? 3
-          : countryId === "ng"
-            ? 4
-            : countryId === "il"
-              ? 5
-              : 1;
+
+  let defaultBaselinePolicy = 1;
+  if (COUNTRY_CODES.includes(countryId)) {
+    defaultBaselinePolicy = COUNTRY_BASELINE_POLICIES[countryId];
+  }
+
   const reformPolicyId = searchParams.get("reform") || defaultBaselinePolicy;
   const baselinePolicyId =
     searchParams.get("baseline") || defaultBaselinePolicy;
 
   const [metadata, setMetadata] = useState(null);
-  const [error] = useState(null);
+  const [metadataError, setMetadataError] = useState(false);
 
   const [baselinePolicy, setBaselinePolicy] = useState({
     id: baselinePolicyId,
@@ -105,19 +100,35 @@ export default function PolicyEngine({ pathname }) {
   const [hasShownHouseholdPopup, setHasShownHouseholdPopup] = useState(false);
   const [userProfile, setUserProfile] = useState({});
 
-  // Update the metadata state when something happens to the countryId (e.g. the user changes the country).
+  // Update the metadata state when something happens to
+  // the countryId (e.g. the user changes the country).
   useEffect(() => {
-    try {
-      updateMetadata(countryId, setMetadata);
-    } catch (e) {
-      // Sometimes this fails. When it does, refresh the page, but only once (use a param in the URL to make sure it only happens once).
-      if (!searchParams.get("refreshed")) {
-        let newSearch = copySearchParams(searchParams);
-        newSearch.set("refreshed", true);
-        setSearchParams(newSearch);
-        window.location.reload();
+    // If we're accessing the page without a country ID,
+    // our router will handle redirecting to a country ID;
+    // this process is guaranteed, thus we will just not fetch
+    // in this situation
+    if (!countryId) {
+      return;
+    }
+
+    async function asyncUpdateMetadata() {
+      try {
+        const metadata = await updateMetadata(countryId);
+        if (!metadata) {
+          setMetadataError(true);
+          setMetadata(null);
+        } else {
+          setMetadata(metadata);
+          setMetadataError(false);
+        }
+      } catch (e) {
+        console.error(e);
+        setMetadataError(true);
+        setMetadata(null);
       }
     }
+
+    asyncUpdateMetadata();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [countryId]);
 
@@ -125,7 +136,7 @@ export default function PolicyEngine({ pathname }) {
   useEffect(() => {
     if (metadata) {
       countryApiCall(countryId, `/policy/${baselinePolicyId}`)
-        .then((res) => res.json())
+        .then((res) => wrappedResponseJson(res))
         .then((dataHolder) => {
           if (dataHolder.result.label === "None") {
             dataHolder.result.label = null;
@@ -143,7 +154,7 @@ export default function PolicyEngine({ pathname }) {
   useEffect(() => {
     if (metadata) {
       countryApiCall(countryId, `/policy/${reformPolicyId}`)
-        .then((res) => res.json())
+        .then((res) => wrappedResponseJson(res))
         .then((dataHolder) => {
           if (dataHolder.result.label === "None") {
             dataHolder.result.label = null;
@@ -160,7 +171,7 @@ export default function PolicyEngine({ pathname }) {
   useEffect(() => {
     if (searchParams.get("renamed") && reformPolicyId) {
       countryApiCall(countryId, `/policy/${reformPolicyId}`)
-        .then((res) => res.json())
+        .then((res) => wrappedResponseJson(res))
         .then((dataHolder) => {
           setReformPolicy({
             data: dataHolder.result.policy_json,
@@ -281,64 +292,79 @@ export default function PolicyEngine({ pathname }) {
       <CookieConsent />
       <Routes>
         {/* Redirect from / to /[countryId] */}
-        <Route path="/" element={<Navigate to={`/${countryId}`} />} />
-
+        <Route path="/" element={<RedirectToCountry />} />
         <Route path="/callback" element={<AuthCallback />} />
-        <Route path="/:countryId" element={<Home />} />
-        <Route path="/:countryId/about" element={<About />} />
-        <Route path="/:countryId/jobs" element={<Jobs />} />
-        <Route path="/:countryId/testimonials" element={<Testimonials />} />
-        <Route
-          path="/:countryId/calculator"
-          element={<CalculatorInterstitial />}
-        />
-        <Route path="/:countryId/research" element={<Research />} />
-        <Route path="/:countryId/donate" element={<Donate />} />
-        <Route path="/:countryId/research/*" element={<BlogPage />} />
-        <Route path="/:countryId/privacy" element={<PrivacyPage />} />
-        <Route path="/:countryId/terms" element={<TACPage />} />
+        <Route path="/:countryId" element={<CountryIdLayout />}>
+          <Route index={true} element={<Home />} />
+          <Route path="about" element={<About />} />
+          <Route path="jobs" element={<Jobs />} />
+          <Route path="testimonials" element={<Testimonials />} />
+          <Route path="calculator" element={<CalculatorInterstitial />} />
+          <Route path="simulations" element={<SimulationsPage />} />
+          <Route path="developer-tools" element={<DeveloperLayout />}>
+            <Route index element={<DeveloperHome />} />
+            <Route path="simulations" element={<SimulationsPage />} />
+            <Route path="api_status" element={<StatusPage />} />
+          </Route>
+          <Route path="research" element={<Outlet />}>
+            <Route index={true} element={<Research />} />
+            <Route path=":postName" element={<BlogPage />} />
+          </Route>
+          <Route path="donate" element={<Donate />} />
+          <Route path="privacy" element={<PrivacyPage />} />
+          <Route path="terms" element={<TACPage />} />
 
-        <Route
-          path="/:countryId/household/*"
-          element={metadata ? householdPage : error ? errorPage : loadingPage}
-        />
-        <Route
-          path="/:countryId/policy/*"
-          element={metadata ? policyPage : error ? errorPage : loadingPage}
-        />
+          <Route
+            path="household/*"
+            element={
+              metadataError ? errorPage : metadata ? householdPage : loadingPage
+            }
+          />
+          <Route
+            path="policy/*"
+            element={
+              metadataError ? errorPage : metadata ? policyPage : loadingPage
+            }
+          />
 
-        <Route
-          path="/:countryId/profile"
-          element={
-            <Navigate to={`/${countryId}/profile/${userProfile.user_id}`} />
-          }
-        />
-        <Route
-          path="/:countryId/profile/:user_id"
-          element={
-            <UserProfilePage
-              metadata={metadata}
-              authedUserProfile={userProfile}
-            />
-          }
-        />
+          <Route
+            path="profile"
+            element={
+              !userProfile ? (
+                <ErrorPage />
+              ) : (
+                <Navigate to={`/${countryId}/profile/${userProfile.user_id}`} />
+              )
+            }
+          />
+          <Route
+            path="profile/:user_id"
+            element={
+              <UserProfilePage
+                metadata={metadata}
+                authedUserProfile={userProfile}
+                metadataError={metadataError}
+              />
+            }
+          />
 
-        <Route
-          path="/:countryId/api"
-          element={<APIDocumentationPage metadata={metadata} />}
-        />
+          <Route
+            path="api"
+            element={<APIDocumentationPage metadata={metadata} />}
+          />
+          {/* redirect from /countryId/blog/slug to /countryId/research/slug */}
+          <Route path="blog/:postName" element={<RedirectBlogPost />} />
+        </Route>
         <Route path="/uk/cec" element={<CitizensEconomicCouncil />} />
-        <Route path="/:countryId/api_status" element={<StatusPage />} />
+        <Route path="/uk/2024-manifestos" element={<ManifestosComparison />} />
         <Route
           path="/us/trafwa-ctc-calculator"
           element={<TrafwaCalculator />}
         />
         <Route path="/us/state-eitcs-ctcs" element={<StateEitcsCtcs />} />
-
-        {/* redirect from /countryId/blog/slug to /countryId/research/slug */}
         <Route
-          path="/:countryId/blog/:slug"
-          element={<Navigate to={`/${countryId}/research/${pathParts[3]}`} />}
+          path="/us/child-tax-credit-2024-election-calculator"
+          element={<CTCComparison />}
         />
 
         {/* Redirect for unrecognized paths */}
@@ -346,4 +372,28 @@ export default function PolicyEngine({ pathname }) {
       </Routes>
     </ConfigProvider>
   );
+}
+
+/**
+ * Extracts country ID from path or returns null if one doesn't exist
+ * @returns {String|null}
+ */
+function extractCountryId() {
+  const path = window.location.pathname;
+  const pathParts = path.split("/").filter((item) => item.length > 0);
+
+  // If valid, return the normal country ID
+  if (pathParts.length > 0 && COUNTRY_CODES.includes(pathParts[0])) {
+    return pathParts[0];
+  }
+  // If we have an invalid ID (e.g., "undefined" or "garbage"),
+  // the router will redirect to "us", so return that as country ID
+  else if (pathParts.length > 0) {
+    return "us";
+  }
+  // Otherwise, we're on the standard page; return null and allow
+  // router to redirect
+  else {
+    return null;
+  }
 }

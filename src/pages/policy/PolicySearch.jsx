@@ -10,6 +10,7 @@ import {
 } from "@ant-design/icons";
 import { getNewPolicyId } from "../../api/parameters";
 import style from "../../style";
+import { wrappedResponseJson } from "../../data/wrappedJson";
 
 export default function PolicySearch(props) {
   const { metadata, target, policy, width, displayStack } = props;
@@ -66,7 +67,7 @@ export default function PolicySearch(props) {
         setIsError(true);
         setIsStackerLoading(false);
       } else {
-        const resJson = await res.json();
+        const resJson = await wrappedResponseJson(res);
         const policyToStack = resJson.result;
         // Reconcile policies; when conflicts occur, defer to newer policy
 
@@ -107,7 +108,7 @@ export default function PolicySearch(props) {
         metadata.countryId,
         `/policies?query=${searchText}&unique_only=true`,
       );
-      const resJson = await res.json();
+      const resJson = await wrappedResponseJson(res);
       setPolicies(
         resJson.result.map((item) => {
           return {
@@ -118,21 +119,6 @@ export default function PolicySearch(props) {
       );
       setLastRequestTime(new Date().getTime());
       setLastSearch(searchText);
-
-      /*
-        .then((data) => {
-          setPolicies(
-            data.result.map((item) => {
-              return {
-                value: item.id,
-                label: `#${item.id} ${item.label}`
-              };
-            }) || [],
-          );
-          setLastRequestTime(new Date().getTime());
-          setLastSearch(searchText);
-        });
-      */
     }
   };
 
@@ -144,6 +130,7 @@ export default function PolicySearch(props) {
         justifyContent: "flex-start",
         alignItems: "flex-start",
         gap: "10px",
+        width: "100%",
       }}
     >
       <Space.Compact

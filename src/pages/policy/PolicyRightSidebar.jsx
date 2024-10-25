@@ -93,6 +93,57 @@ function TimePeriodSelector(props) {
   );
 }
 
+function FullLiteToggle() {
+  // Selector like the dataset selector that toggles between 'full' and 'lite' versions of the dataset.
+  // should set a query param with mode=light or mode=full
+  const [searchParams, setSearchParams] = useSearchParams();
+  const value = searchParams.get("mode") || "full";
+  const displayCategory = useDisplayCategory();
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "row",
+        justifyContent: "flex-start",
+        alignItems: "center",
+        gap: "10px",
+      }}
+    >
+      <Switch
+        checked={value === "lite"}
+        size={displayCategory !== "mobile" && "small"}
+        onChange={(checked) => {
+          let newSearch = copySearchParams(searchParams);
+          newSearch.set("mode", checked ? "lite" : "full");
+          setSearchParams(newSearch);
+        }}
+      />
+      <p
+        style={{
+          margin: 0,
+          fontSize: displayCategory !== "mobile" && "0.95em",
+        }}
+      >
+        Use a smaller sample
+      </p>
+      <Tooltip
+        placement="topRight"
+        title="When checked, limit simulations to a random 10,000 household set."
+        trigger={displayCategory === "mobile" ? "click" : "hover"}
+      >
+        <QuestionCircleOutlined
+          style={{
+            color: "rgba(0, 0, 0, 0.85)",
+            opacity: 0.85,
+            cursor: "pointer",
+          }}
+        />
+      </Tooltip>
+    </div>
+  );
+}
+
 /**
  * A (hopefully temporary) component meant to abstract away the fact
  * that the US enhanced CPS data is defined as a region within the US
@@ -331,8 +382,42 @@ export function SinglePolicyChange(props) {
   );
 }
 
+export function DeprecatedPolicyChange() {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        paddingLeft: 10,
+      }}
+    >
+      <div>
+        <span style={{ fontFamily: "Roboto Serif", color: "black" }}>
+          This policy is deprecated.
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function PolicyItem(props) {
-  const { metadata, parameterName, reformData } = props;
+  const { metadata, parameterName, reformData, isPolicyDeprecated } = props;
+
+  if (isPolicyDeprecated) {
+    return (
+      <div>
+        <div
+          style={{
+            paddingLeft: 10,
+            paddingRight: 40,
+          }}
+        >
+          <DeprecatedPolicyChange />
+        </div>
+      </div>
+    );
+  }
+
   const parameter = metadata.parameters[parameterName];
   let changes = [];
   for (const [timePeriod, value] of Object.entries(reformData[parameterName])) {
@@ -364,8 +449,15 @@ function PolicyItem(props) {
 }
 
 function PolicyDisplay(props) {
-  const { policy, metadata, region, timePeriod, closeDrawer, hideButtons } =
-    props;
+  const {
+    policy,
+    metadata,
+    region,
+    timePeriod,
+    closeDrawer,
+    hideButtons,
+    isPolicyDeprecated,
+  } = props;
   policy.reform.data = Object.fromEntries(
     Object.entries(policy.reform.data).filter(
       ([key, value]) =>
@@ -379,14 +471,14 @@ function PolicyDisplay(props) {
       style={{
         paddingTop: 20,
         maxHeight: "20vh",
-        overflow: "scroll",
+        overflowY: "scroll",
       }}
     >
       <Carousel
         variant="dark"
         indicators={false}
         interval={null}
-        controls={reformLength > 1 ? true : false}
+        controls={reformLength > 1 && !isPolicyDeprecated ? true : false}
         slide={true}
       >
         {Object.keys(policy.reform.data).map((parameterName) => (
@@ -398,7 +490,7 @@ function PolicyDisplay(props) {
               newSearchParams.set("reform", policy.reform.id);
               newSearchParams.set("region", region);
               newSearchParams.set("timePeriod", timePeriod);
-              setSearchParams(newSearchParams);
+              setSearchParams(newSearchParams, { replace: true });
               hideButtons && closeDrawer();
             }}
           >
@@ -407,6 +499,7 @@ function PolicyDisplay(props) {
               metadata={metadata}
               parameterName={parameterName}
               reformData={policy.reform.data}
+              isPolicyDeprecated={isPolicyDeprecated}
             />
           </Carousel.Item>
         ))}
@@ -421,10 +514,19 @@ function PolicyDisplay(props) {
 }
 
 export default function PolicyRightSidebar(props) {
-  const { policy, setPolicy, metadata, hideButtons, closeDrawer, defaultOpen } =
-    props;
+  const {
+    policy,
+    setPolicy,
+    metadata,
+    hideButtons,
+    closeDrawer,
+    defaultOpen,
+    isPolicyDeprecated,
+  } = props;
+
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+
   const region = searchParams.get("region");
   const timePeriod = searchParams.get("timePeriod");
   const reformPolicyId = searchParams.get("reform");
@@ -443,6 +545,27 @@ export default function PolicyRightSidebar(props) {
   const validatedStateAbbreviation = options.find(
     (option) => option.value === stateAbbreviation,
   )?.value;
+
+  const baselineData = policy.baseline.data;
+  const reformData = policy.reform.data;
+
+  // Convenience function for determining if baseline and reform
+  // are both current law, and thus, there is no reform
+  function isNoReform(baselineData, reformData) {
+    if (!baselineData || !reformData) {
+      return true;
+    }
+
+    if (
+      Object.keys(baselineData).length === 0 &&
+      Object.keys(reformData).length === 0
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
   const confirmEconomicImpact = () => {
     let message = "";
     if (validatedStateAbbreviation && stateAbbreviation !== region) {
@@ -481,7 +604,7 @@ export default function PolicyRightSidebar(props) {
     } else {
       let newSearch = copySearchParams(searchParams);
       newSearch.set("focus", "policyOutput.policyBreakdown");
-      setSearchParams(newSearch);
+      setSearchParams(newSearch, { replace: true });
     }
   };
 
@@ -513,7 +636,7 @@ export default function PolicyRightSidebar(props) {
         "baseline",
         searchParams.get("baseline") || defaults.baseline,
       );
-      setSearchParams(newSearch);
+      setSearchParams(newSearch, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [region, timePeriod, reformPolicyId, baselinePolicyId]);
@@ -558,7 +681,7 @@ export default function PolicyRightSidebar(props) {
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
-        height: "100%",
+        position: "relative",
       }}
     >
       <div>
@@ -616,6 +739,7 @@ export default function PolicyRightSidebar(props) {
           timePeriod={timePeriod}
           closeDrawer={closeDrawer}
           hideButtons={hideButtons}
+          isPolicyDeprecated={isPolicyDeprecated}
         />
         <div style={{ paddingLeft: 5 }}>
           <Collapsible
@@ -710,6 +834,7 @@ export default function PolicyRightSidebar(props) {
                     timePeriod={timePeriod}
                   />
                 )}
+                <FullLiteToggle metadata={metadata} />
               </div>
             }
           />
@@ -728,9 +853,8 @@ export default function PolicyRightSidebar(props) {
         {!hideButtons && focus && !focus.startsWith("policyOutput") && (
           <SearchParamNavButton
             type={
-              Object.keys(policy.reform.data).length === 0
-                ? "disabled"
-                : "primary"
+              // Disable output if both baseline and reform are current law
+              isNoReform(baselineData, reformData) ? "disabled" : "primary"
             }
             text="Calculate economic impact"
             onClick={confirmEconomicImpact}

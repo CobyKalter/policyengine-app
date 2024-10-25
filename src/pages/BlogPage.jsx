@@ -1,4 +1,4 @@
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 import useCountryId from "../hooks/useCountryId";
 import Header from "../layout/Header";
 import Footer from "../layout/Footer";
@@ -31,6 +31,7 @@ import {
   HighlightedBlock,
   PlotlyChartCode,
 } from "../layout/MarkdownFormatter";
+import { formatFullDate } from "../lang/format";
 
 // Function to handle image loading
 const handleImageLoad = (path) => {
@@ -46,12 +47,11 @@ const handleImageLoad = (path) => {
 
 export default function BlogPage() {
   // /uk/research/blog-slug-here
-  const url = window.location.pathname;
+  const { postName } = useParams();
   const countryId = useCountryId();
-  const postName = url.split("/")[3];
 
   const post = posts.find((post) => post.slug === postName);
-  const postDate = moment(post.date, "YYYY-MM-DD HH:mm:ss");
+  const postDate = formatFullDate(moment(post.date), countryId);
 
   const imageUrl = post.image ? handleImageLoad(post.image) : "";
   const file = require(`../posts/articles/${post.filename}`);
@@ -197,7 +197,7 @@ function NotebookOutputPlain({ data }) {
     content = parseJSONSafe(processedData);
     return <NotebookOutputPlotly data={content} />;
   } catch (e) {
-    console.log(e, data);
+    console.error(e, data);
     content = data;
   }
   return <p>{JSON.stringify(data)}</p>;
@@ -308,7 +308,7 @@ function PostBodySection({ post, markdown, notebook }) {
             <LeftContents markdown={markdown} notebook={notebook} />
           </div>
         </div>
-        <div style={{ flex: 4 }}>
+        <div style={{ flex: 4, minWidth: 0 }}>
           {bodyContent}
           <AuthorSection post={post} />
         </div>
@@ -371,9 +371,7 @@ function PostHeadingSection({ post, markdown, notebook, postDate, imageUrl }) {
     return (
       <div style={{ display: "flex" }}>
         <div style={{ flex: 1 }}>
-          <p className="spaced-sans-serif">
-            {postDate.format("MMMM DD, YYYY")}
-          </p>
+          <p className="spaced-sans-serif">{postDate}</p>
           <Authorship post={post} />
           <div style={{ marginBottom: 100 }} />
           <ReadTime markdown={markdown} />
@@ -427,9 +425,7 @@ function PostHeadingSection({ post, markdown, notebook, postDate, imageUrl }) {
             }}
           >
             <Authorship post={post} />
-            <p className="spaced-sans-serif">
-              {postDate.format("MMMM DD, YYYY")}
-            </p>
+            <p className="spaced-sans-serif">{postDate}</p>
             <ReadTime markdown={markdown} />
           </div>
           <img alt={post.title} src={imageUrl} style={{ width: "100%" }} />
@@ -451,9 +447,7 @@ function PostHeadingSection({ post, markdown, notebook, postDate, imageUrl }) {
             }}
           >
             <div>
-              <p className="spaced-sans-serif">
-                {postDate.format("MMMM DD, YYYY")}
-              </p>
+              <p className="spaced-sans-serif">{postDate}</p>
               <Authorship post={post} />
             </div>
             <ReadTime markdown={markdown} />
@@ -698,14 +692,7 @@ function LeftContents(props) {
     return text;
   });
   const headerSlugs = headers.map((header) =>
-    header
-      .split(" ")
-      .slice(1)
-      .join(" ")
-      .split(" ")
-      .join("-")
-      .replace("\\", "")
-      .replace(/,/g, ""),
+    header.replace(/[#,/]/g, "").trim().replace(/\s+/g, "-").toLowerCase(),
   );
 
   let contents = [];
@@ -713,6 +700,7 @@ function LeftContents(props) {
     const headerLevel = headerLevels[i];
     const headerText = headerTexts[i];
     const headerSlug = headerSlugs[i];
+
     contents.push(
       <div
         style={{ display: "flex", alignItems: "center", marginBottom: 5 }}

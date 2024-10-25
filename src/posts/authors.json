@@ -5,7 +5,7 @@
     "twitter": "https://twitter.com/nikhil_woodruff",
     "github": "https://github.com/nikhilwoodruff",
     "linkedin": "https://www.linkedin.com/in/nikhil-woodruff/",
-    "headshot": "nikhil-woodruff.jpg",
+    "headshot": "nikhil-woodruff.png",
     "bio": "Nikhil is PolicyEngine's co-founder and CTO.",
     "title": "PolicyEngine's Co-founder and CTO"
   },
@@ -87,5 +87,33 @@
     "twitter": "https://twitter.com/PavelMakarchuk3",
     "headshot": "pavel-makarchuk.png",
     "title": "Policy Modeling Manager at PolicyEngine"
+  },
+  "ben-gross": {
+    "name": "Ben Gross",
+    "email": "ben@policyengine.org",
+    "bio": "Ben is a communications intern at PolicyEngine.",
+    "linkedin": "https://www.linkedin.com/in/ben-gross-146330178/",
+    "twitter": "twitter.com/bengrossbg",
+    "headshot": "ben-gross.png",
+    "title": "Communications Intern at PolicyEngine"
+  },
+  "david-trimmer": {
+    "name": "David Trimmer",
+    "email": "david@policyengine.org",
+    "bio": "David is a policy fellow at PolicyEngine.",
+    "linkedin": "https://www.linkedin.com/in/david-trimmer99/",
+    "twitter": "twitter.com/DTrim_99",
+    "headshot": "david-trimmer.jpeg",
+    "title": "Policy Fellow at PolicyEngine"
+  },
+  "vahid-ahmadi": {
+    "name": "Vahid Ahmadi",
+    "email": "vahid@policyengine.org",
+    "bio": "Vahid is a research associate at PolicyEngine.",
+    "linkedin": "https://www.linkedin.com/in/vahidahmadi/",
+    "github": "https://github.com/vahid-ahmadi",
+    "twitter": "twitter.com/vahiidahmadi",
+    "headshot": "vahid-ahmadi.jpeg",
+    "title": "Research Associate at PolicyEngine"
   }
 }

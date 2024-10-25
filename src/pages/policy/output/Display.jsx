@@ -8,15 +8,17 @@ import { getImpactReps } from "./ImpactTypes";
 import { Progress, message } from "antd";
 import { useEffect, useRef, useState } from "react";
 import Analysis from "./Analysis";
+import PolicyReproducibility from "./PolicyReproducibility";
 import useMobile from "layout/Responsive";
-import ErrorPage from "layout/Error";
+import ErrorPage from "layout/ErrorPage";
 import ResultActions from "layout/ResultActions";
 import { downloadCsv } from "./utils";
 import { useReactToPrint } from "react-to-print";
 import PolicyBreakdown from "./PolicyBreakdown";
 import { Helmet } from "react-helmet";
 import useCountryId from "../../../hooks/useCountryId";
-import BottomCarousel from "../../../layout/BottomCarousel";
+import BottomImpactDescription from "../../../layout/BottomImpactDescription";
+import { Link } from "react-router-dom";
 
 /**
  *
@@ -40,11 +42,10 @@ export function DisplayEmpty() {
  */
 
 export function DisplayError(props) {
-  const { error } = props;
   return (
     <ErrorPage
       message={`We ran into an issue when trying to simulate your policy. \
-      Please try again later. The full message is ${JSON.stringify(error)}`}
+      Please try again later.`}
     />
   );
 }
@@ -57,7 +58,37 @@ export function DisplayError(props) {
  * @returns component for displaying a progress bar that fills up over time
  */
 export function DisplayWait(props) {
-  const { secondsElapsed, averageImpactTime } = props;
+  const { secondsElapsed, averageImpactTime, queuePos } = props;
+
+  const countryId = useCountryId();
+
+  let queueMsg = "";
+  if (Number(queuePos) === 0) {
+    queueMsg = "We are currently running your simulation.";
+  } else {
+    queueMsg = `Your position in the queue is ${queuePos}.`;
+  }
+
+  const averageSeconds = Math.min(
+    Math.round(averageImpactTime / 5) * 5,
+    60 * 5,
+  );
+
+  const formatDuration = (totalSeconds) => {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+
+    if (minutes === 0) {
+      return `${seconds} second${seconds !== 1 ? "s" : ""}`;
+    } else if (seconds === 0) {
+      return `${minutes} minute${minutes !== 1 ? "s" : ""}`;
+    } else {
+      return `${minutes} minute${minutes !== 1 ? "s" : ""} and ${seconds} second${seconds !== 0 ? "s" : 0}`;
+    }
+  };
+
+  const averageTime = formatDuration(averageSeconds);
+
   return (
     <div style={{ textAlign: "center", paddingTop: 50 }}>
       <LoadingCentered message="Simulating the impact of your policy..." />
@@ -70,9 +101,19 @@ export function DisplayWait(props) {
         }
         strokeColor={style.colors.BLUE}
       />
+      <p style={{ paddingTop: "12px", marginBottom: "2px" }}>{queueMsg}</p>
       <p style={{ color: "grey" }}>
-        This usually takes around {Math.round(averageImpactTime / 5) * 5}{" "}
-        seconds, but may take longer.
+        This usually takes around {averageTime}, but may take longer.
+      </p>
+      <p>
+        You can track the queue{" "}
+        <Link
+          to={`/${countryId}/simulations`}
+          style={{ color: style.colors.BLUE, textDecoration: "underline" }}
+        >
+          here
+        </Link>
+        .
       </p>
     </div>
   );
@@ -122,6 +163,7 @@ export function DisplayImpact(props) {
   const mobile = useMobile();
   const filename = impactType + `${policyLabel}`;
   let pane, downloadCsvFn;
+
   if (impactType === "analysis") {
     pane = (
       <Analysis
@@ -143,6 +185,8 @@ export function DisplayImpact(props) {
         region={region}
       />
     );
+  } else if (impactType === "codeReproducibility") {
+    pane = <PolicyReproducibility metadata={metadata} policy={policy} />;
   }
   // Remove the below else-if block when labor supply impacts are expanded
   // back to all countries
@@ -204,10 +248,14 @@ export function LowLevelDisplay(props) {
     policy,
     showPolicyImpactPopup,
   } = props;
+
   const mobile = useMobile();
+
   const [preparingForScreenshot, setPreparingForScreenshot] = useState(false);
+
   const [, takeScreenShot] = useScreenshot();
   const componentRef = useRef(null);
+
   useEffect(() => {
     if (preparingForScreenshot) {
       setTimeout(() => {
@@ -264,22 +312,19 @@ export function LowLevelDisplay(props) {
   });
 
   let bottomText = "";
-  let bottomLink = "";
+  let bottomLink = null;
 
   if (metadata.countryId === "us") {
     bottomText = `PolicyEngine US v${selectedVersion} estimates reform impacts using microsimulation. `;
-    bottomLink =
-      "/us/research/enhancing-the-current-population-survey-for-policy-analysis";
 
     if (region === "enhanced_us") {
       bottomText = bottomText.concat(
         "These calculations utilize enhanced CPS data, a beta feature. ",
       );
+      bottomLink = "/us/research/enhanced-cps-beta";
     }
   } else if (metadata.countryId === "uk") {
     bottomText = `PolicyEngine UK v${selectedVersion} estimates reform impacts using microsimulation. `;
-    bottomLink =
-      "/uk/research/how-machine-learning-tools-make-policyengine-more-accurate";
   }
 
   const embed = new URLSearchParams(window.location.search).get("embed");
@@ -289,13 +334,15 @@ export function LowLevelDisplay(props) {
       <p
         style={{
           marginBottom: 0,
-          fontSize: region === "enhanced_us" && "12px",
+          fontSize: "12px",
         }}
       >
         {bottomText}
-        <a href={bottomLink} target="_blank" rel="noreferrer">
-          Learn more
-        </a>
+        {bottomLink && (
+          <a href={bottomLink} target="_blank" rel="noreferrer">
+            Learn more
+          </a>
+        )}
       </p>
     );
 
@@ -354,8 +401,8 @@ export function LowLevelDisplay(props) {
       <div ref={componentRef} id="downloadable-content">
         {children}
       </div>
-      {!mobile && !preparingForScreenshot && (
-        <BottomCarousel
+      {!mobile && (
+        <BottomImpactDescription
           selected={focus}
           options={policyOutputTree[0].children}
           bottomElements={bottomElements}

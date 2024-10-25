@@ -27,6 +27,7 @@ import MobileCalculatorPage from "../layout/MobileCalculatorPage.jsx";
 import RecreateHouseholdPopup from "./household/output/RecreateHouseholdPopup.jsx";
 import TaxYear from "./household/input/TaxYear";
 import { Helmet } from "react-helmet";
+import { wrappedResponseJson } from "../data/wrappedJson.js";
 
 export default function HouseholdPage(props) {
   const {
@@ -56,7 +57,7 @@ export default function HouseholdPage(props) {
     if (focus === "") {
       let newSearch = copySearchParams(searchParams);
       newSearch.set("focus", "intro");
-      setSearchParams(newSearch);
+      setSearchParams(newSearch, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus]);
@@ -100,7 +101,7 @@ export default function HouseholdPage(props) {
           console.error("Back-end error while attempting to get household");
         }
 
-        const resJSON = await res.json();
+        const resJSON = await wrappedResponseJson(res);
         dataHolder = {
           input: resJSON.result.household_json,
         };
@@ -158,7 +159,7 @@ export default function HouseholdPage(props) {
             (metadata ? metadata.current_law_id : "current-law")
           }`,
         )
-          .then((res) => res.json())
+          .then((res) => wrappedResponseJson(res))
           .then((dataHolder) => {
             if (dataHolder.status === "error") {
               setLoading(false);
@@ -178,7 +179,7 @@ export default function HouseholdPage(props) {
             countryId,
             `/household/${householdId}/policy/${policy.reform.id}`,
           )
-            .then((res) => res.json())
+            .then((res) => wrappedResponseJson(res))
             .then((dataHolder) => {
               if (dataHolder.status === "error") {
                 setLoading(false);
@@ -311,7 +312,7 @@ export default function HouseholdPage(props) {
         (householdId) => {
           let newSearch = new URLSearchParams(window.location.search);
           newSearch.set("household", householdId);
-          setSearchParams(newSearch);
+          setSearchParams(newSearch, { replace: true });
         },
       );
       setLoading(true);
@@ -379,6 +380,14 @@ export default function HouseholdPage(props) {
         setIsRHPOpen={setIsRHPOpen}
       />
       <ThreeColumnPage
+        enableLeftCollapse
+        enableCenterCollapse
+        leftCollapseTitle="Household summary"
+        centerCollapseTitle={
+          focus && focus.startsWith("householdOutput")
+            ? "Household impact"
+            : "Household variables"
+        }
         middle={<HouseholdLeftSidebar metadata={metadata} />}
         right={middle}
         left={
