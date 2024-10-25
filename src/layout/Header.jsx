@@ -371,6 +371,7 @@ function Hamburger() {
           fontSize: 20,
           cursor: "pointer",
         }}
+        /* toggles the menu when clicking the Hamburger menu */
         onClick={() => setIsOpen(!isOpen)}
       >
         <span

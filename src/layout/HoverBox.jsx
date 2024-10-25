@@ -58,14 +58,14 @@ export function HoverBox({
       onMouseOut={(e) =>
         (e.currentTarget.style.boxShadow = containerStyle.boxShadow)
       }
+  // Click event handler for the page navigation    
       onClick={
         onClick ||
         (link &&
-          (() => {
-            window.open(link, "_self");
+          (() => {window.open(link, "_self");
           }))
-      }
-    >
+      } 
+      > 
       {children}
     </div>
   );
